@@ -92,11 +92,13 @@ jobs:
           fi
 
 
-      - name: Verify JS runtime for yt-dlp
+      - name: Verify JS runtime and download EJS solver
         run: |
+          echo "Deno: $(which deno) -> $(deno --version | head -1)"
           echo "Node.js: $(which node) -> $(node --version)"
-          echo "PATH: $PATH"
-          python -c "import shutil; print('Python sees node:', shutil.which('node'))"
+          echo "=== Pre-downloading EJS challenge solver scripts ==="
+          yt-dlp --remote-components ejs:github --skip-download "https://www.youtube.com/watch?v=dQw4w9WgXcQ" 2>&1 || true
+          echo "=== EJS solver ready ==="
 
       - name: Download Video
         id: download

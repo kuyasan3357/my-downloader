@@ -138,6 +138,7 @@ def download_single(url, fmt, output_dir):
             "fragment_retries": 5,
             "concurrent_fragment_downloads": 4,
             "verbose": True,
+            "remote_components": {"ejs:github"},
             "extractor_args": {
                 "youtube": {
                     "player_client": ["web_creator", "web"],
