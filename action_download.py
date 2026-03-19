@@ -115,6 +115,17 @@ def download_single(url, fmt, output_dir):
 
         # yt-dlp pathway
         log(f"yt-dlp download: {url}")
+
+        # Verify JS runtime for n-parameter challenge
+        import shutil
+        for rt in ("node", "deno", "phantomjs"):
+            path = shutil.which(rt)
+            if path:
+                log(f"JS runtime found: {rt} -> {path}")
+                break
+        else:
+            log("WARNING: No JS runtime found! n-parameter solving may fail")
+
         outtmpl = os.path.join(output_dir, "%(title)s.%(ext)s")
         opts = {
             "outtmpl": outtmpl,
@@ -126,9 +137,10 @@ def download_single(url, fmt, output_dir):
             "retries": 5,
             "fragment_retries": 5,
             "concurrent_fragment_downloads": 4,
+            "verbose": True,
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["web_creator", "mweb", "web"],
+                    "player_client": ["web_creator", "web"],
                 },
             },
             "http_headers": {

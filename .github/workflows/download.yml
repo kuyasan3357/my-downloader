@@ -87,6 +87,12 @@ jobs:
           fi
 
 
+      - name: Verify JS runtime for yt-dlp
+        run: |
+          echo "Node.js: $(which node) -> $(node --version)"
+          echo "PATH: $PATH"
+          python -c "import shutil; print('Python sees node:', shutil.which('node'))"
+
       - name: Download Video
         id: download
         env:
