@@ -68,12 +68,6 @@ jobs:
             echo "CALLBACK_URL=" >> $GITHUB_OUTPUT
           fi
 
-          # Check if FTP is configured
-          if [ -n "${{ secrets.FTP_SERVER }}" ] && [ "${{ secrets.FTP_SERVER }}" != "" ]; then
-            echo "HAS_FTP=true" >> $GITHUB_OUTPUT
-          else
-            echo "HAS_FTP=false" >> $GITHUB_OUTPUT
-          fi
 
       - name: Download Video
         id: download
@@ -103,16 +97,17 @@ jobs:
             !downloads/**/results.json
           retention-days: 1
 
-      - name: Upload to Hosting (FTP)
-        if: success() && steps.vars.outputs.HAS_FTP == 'true'
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./downloads/
-          server-dir: ./public_html/downloads/
-          dangerous-clean-slate: false
+      # FTP Upload - uncomment when FTP secrets are correctly configured
+      # - name: Upload to Hosting (FTP)
+      #   if: success()
+      #   uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      #   with:
+      #     server: ${{ secrets.FTP_SERVER }}
+      #     username: ${{ secrets.FTP_USERNAME }}
+      #     password: ${{ secrets.FTP_PASSWORD }}
+      #     local-dir: ./downloads/
+      #     server-dir: ./public_html/downloads/
+      #     dangerous-clean-slate: false
 
       - name: Callback to web
         if: always() && steps.vars.outputs.CALLBACK_URL != ''
