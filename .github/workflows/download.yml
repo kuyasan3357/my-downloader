@@ -68,6 +68,13 @@ jobs:
             echo "CALLBACK_URL=" >> $GITHUB_OUTPUT
           fi
 
+          # Check if FTP is configured
+          if [ -n "${{ secrets.FTP_SERVER }}" ] && [ "${{ secrets.FTP_SERVER }}" != "" ]; then
+            echo "HAS_FTP=true" >> $GITHUB_OUTPUT
+          else
+            echo "HAS_FTP=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Download Video
         id: download
         run: |
@@ -97,10 +104,8 @@ jobs:
           retention-days: 1
 
       - name: Upload to Hosting (FTP)
-        if: success() && env.FTP_SERVER != ''
+        if: success() && steps.vars.outputs.HAS_FTP == 'true'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        env:
-          FTP_SERVER: ${{ secrets.FTP_SERVER }}
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
