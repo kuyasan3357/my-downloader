@@ -206,6 +206,8 @@ switch ($action) {
             'message' => $task['message'],
             'run_id' => $task['run_id'],
             'files' => $files,
+            'gdrive_links' => $task['gdrive_links'] ?? [],
+            'telegram_uploaded' => $task['telegram_uploaded'] ?? false,
             'actions_url' => $task['run_id']
                 ? "https://github.com/" . GITHUB_OWNER . "/" . GITHUB_REPO . "/actions/runs/" . $task['run_id']
                 : null,
@@ -231,6 +233,13 @@ switch ($action) {
                 $tasks[$taskId]['status'] = ($input['status'] === 'success') ? 'completed' : 'failed';
                 $tasks[$taskId]['run_id'] = $input['run_id'] ?? null;
                 $tasks[$taskId]['message'] = ($input['status'] === 'success') ? 'Download completed!' : 'Download failed.';
+                // Store cloud upload links
+                if (!empty($input['gdrive_links'])) {
+                    $tasks[$taskId]['gdrive_links'] = explode(',', $input['gdrive_links']);
+                }
+                if (($input['telegram'] ?? '') === 'true') {
+                    $tasks[$taskId]['telegram_uploaded'] = true;
+                }
                 save_tasks($tasks);
             }
         }

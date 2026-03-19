@@ -51,7 +51,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg lftp
+          sudo apt-get install -y ffmpeg
 
       - name: Install Chrome (for Selenium/Douyin)
         run: |
@@ -61,7 +61,7 @@ jobs:
           sudo apt-get install -y google-chrome-stable
 
       - name: Install Python dependencies
-        run: pip install -U yt-dlp requests selenium bgutil-ytdlp-pot-provider
+        run: pip install -U yt-dlp requests selenium bgutil-ytdlp-pot-provider google-api-python-client google-auth
 
       - name: Start PO Token server (bypasses YouTube bot detection)
         run: |
@@ -104,6 +104,10 @@ jobs:
         id: download
         env:
           YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GDRIVE_CREDENTIALS: ${{ secrets.GDRIVE_CREDENTIALS }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
           TASK_ARGS=""
           if [ -n "${{ steps.vars.outputs.TASK_ID }}" ]; then
@@ -130,27 +134,26 @@ jobs:
             !downloads/**/results.json
           retention-days: 1
 
-      - name: Upload to Hosting (FTP)
+      - name: Upload results summary
         if: success()
         run: |
           TASK_ID="${{ steps.download.outputs.task_id }}"
-
-          echo "=== Uploading files via FTP ==="
-          echo "Task ID: $TASK_ID"
-
-          # Create task directory and upload all video/audio files
-          lftp -u "${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }}" "${{ secrets.FTP_SERVER }}" <<EOF
-          set ssl:verify-certificate no
-          set ftp:passive-mode yes
-          mkdir -p /public_html/downloader/downloads/${TASK_ID}
-          cd /public_html/downloader/downloads/${TASK_ID}
-          lcd downloads/${TASK_ID}
-          mput -E *.mp4 *.mp3 *.webm *.m4a *.jpg *.png *.webp 2>/dev/null || true
-          glob mput *
-          bye
-          EOF
-
-          echo "=== FTP upload done ==="
+          echo "=== Upload Results ==="
+          if [ -f "downloads/${TASK_ID}/results.json" ]; then
+            python -c "
+import json
+with open('downloads/${TASK_ID}/results.json') as f:
+    data = json.load(f)
+uploads = data.get('uploads', {})
+tg = uploads.get('telegram', [])
+gd = uploads.get('gdrive', [])
+print(f'Telegram: {len(tg)} files uploaded')
+for t in tg: print(f'  ✅ {t[\"filename\"]}')
+print(f'Google Drive: {len(gd)} files uploaded')
+for g in gd: print(f'  ✅ {g[\"filename\"]} -> {g[\"link\"]}')
+if not tg and not gd: print('⚠️ No cloud uploads (check secrets)')
+"
+          fi
 
       - name: Callback to web
         if: always() && steps.vars.outputs.CALLBACK_URL != ''
@@ -159,7 +162,9 @@ jobs:
           TASK_ID="${{ steps.download.outputs.task_id || steps.vars.outputs.TASK_ID }}"
           RUN_ID="${{ github.run_id }}"
           FILES=$(find downloads/ -type f ! -name "results.json" -printf '%f|%s\n' 2>/dev/null | head -20)
+          GDRIVE_LINKS="${{ steps.download.outputs.gdrive_links || '' }}"
+          TELEGRAM_OK="${{ steps.download.outputs.telegram_uploaded || 'false' }}"
           curl -s -X POST "${{ steps.vars.outputs.CALLBACK_URL }}" \
             -H "Content-Type: application/json" \
             -H "X-Action-Secret: ${{ secrets.ACTION_SECRET }}" \
-            -d "{\"task_id\":\"${TASK_ID}\",\"run_id\":\"${RUN_ID}\",\"status\":\"${STATUS}\",\"files\":\"${FILES}\"}" || true
+            -d "{\"task_id\":\"${TASK_ID}\",\"run_id\":\"${RUN_ID}\",\"status\":\"${STATUS}\",\"files\":\"${FILES}\",\"gdrive_links\":\"${GDRIVE_LINKS}\",\"telegram\":\"${TELEGRAM_OK}\"}" || true

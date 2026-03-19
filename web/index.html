@@ -204,8 +204,26 @@ async function checkStatus() {
                 break;
         }
 
+        // Show cloud upload links
+        let cloudHtml = '';
+        if (data.gdrive_links && data.gdrive_links.length > 0) {
+            cloudHtml += data.gdrive_links.map((link, i) => `
+                <div class="file-item" style="border-left:3px solid #4285f4">
+                    <div class="file-info">
+                        <div class="file-name">📁 Google Drive file ${i+1}</div>
+                    </div>
+                    <a class="file-dl-btn" href="${link}" target="_blank" style="background:#4285f4">Open GDrive</a>
+                </div>
+            `).join('');
+        }
+        if (data.telegram_uploaded) {
+            cloudHtml += `<div class="file-item" style="border-left:3px solid #0088cc">
+                <div class="file-info"><div class="file-name">📨 Sent to Telegram Bot</div></div>
+            </div>`;
+        }
+
         if (data.files && data.files.length > 0) {
-            document.getElementById('fileList').innerHTML = data.files.map(f => `
+            document.getElementById('fileList').innerHTML = cloudHtml + data.files.map(f => `
                 <div class="file-item">
                     <div class="file-info">
                         <div class="file-name">${esc(f.filename)}</div>
@@ -214,6 +232,8 @@ async function checkStatus() {
                     <a class="file-dl-btn" href="${f.download_url}" download>Download</a>
                 </div>
             `).join('');
+        } else if (cloudHtml) {
+            document.getElementById('fileList').innerHTML = cloudHtml;
         }
     } catch (err) { console.error('Poll error:', err); }
 }

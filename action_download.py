@@ -1,6 +1,7 @@
 """
 GitHub Actions download wrapper.
 Calls downloader_core.py logic directly, outputs results as JSON.
+Supports upload to Telegram Bot and Google Drive.
 """
 
 import os
@@ -8,7 +9,9 @@ import sys
 import json
 import time
 import argparse
+import mimetypes
 
+import requests as http_requests
 import yt_dlp
 
 from downloader_core import (
@@ -57,6 +60,157 @@ def setup_cookies():
         log(f"Cookies file created: {COOKIES_FILE}")
         return COOKIES_FILE
     return None
+
+
+###############################################################################
+# Upload helpers
+###############################################################################
+
+def upload_to_telegram(file_path, task_id):
+    """Upload file to Telegram via Bot API. Returns message info or None."""
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    if not bot_token or not chat_id:
+        log("Telegram: skipped (no BOT_TOKEN or CHAT_ID)")
+        return None
+
+    file_size = os.path.getsize(file_path)
+    filename = os.path.basename(file_path)
+    size_mb = file_size / (1024 * 1024)
+    log(f"Telegram: uploading {filename} ({size_mb:.1f} MB)")
+
+    # Telegram Bot API limit: 50MB for sendDocument, 2GB for local bot API
+    if file_size > 50 * 1024 * 1024:
+        log(f"Telegram: file too large ({size_mb:.1f} MB > 50MB limit), sending as link")
+        return None
+
+    try:
+        mime = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+        is_video = mime.startswith("video/")
+
+        if is_video:
+            url = f"https://api.telegram.org/bot{bot_token}/sendVideo"
+            with open(file_path, "rb") as f:
+                resp = http_requests.post(url, data={
+                    "chat_id": chat_id,
+                    "caption": f"📥 {filename}\n🆔 Task: {task_id}",
+                    "supports_streaming": "true",
+                }, files={"video": (filename, f, mime)}, timeout=600)
+        else:
+            url = f"https://api.telegram.org/bot{bot_token}/sendDocument"
+            with open(file_path, "rb") as f:
+                resp = http_requests.post(url, data={
+                    "chat_id": chat_id,
+                    "caption": f"📥 {filename}\n🆔 Task: {task_id}",
+                }, files={"document": (filename, f, mime)}, timeout=600)
+
+        data = resp.json()
+        if data.get("ok"):
+            log(f"Telegram: uploaded {filename} successfully")
+            return data.get("result")
+        else:
+            log(f"Telegram: failed - {data.get('description', 'unknown error')}")
+            return None
+    except Exception as e:
+        log(f"Telegram: error - {e}")
+        return None
+
+
+def upload_to_gdrive(file_path, task_id):
+    """Upload file to Google Drive via service account. Returns file link or None."""
+    creds_json = os.environ.get("GDRIVE_CREDENTIALS", "").strip()
+    folder_id = os.environ.get("GDRIVE_FOLDER_ID", "").strip()
+    if not creds_json or not folder_id:
+        log("Google Drive: skipped (no GDRIVE_CREDENTIALS or GDRIVE_FOLDER_ID)")
+        return None
+
+    try:
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+        from googleapiclient.http import MediaFileUpload
+
+        # Parse service account credentials
+        creds_data = json.loads(creds_json)
+        creds = service_account.Credentials.from_service_account_info(
+            creds_data,
+            scopes=["https://www.googleapis.com/auth/drive.file"],
+        )
+        service = build("drive", "v3", credentials=creds)
+
+        filename = os.path.basename(file_path)
+        file_size = os.path.getsize(file_path)
+        size_mb = file_size / (1024 * 1024)
+        log(f"Google Drive: uploading {filename} ({size_mb:.1f} MB)")
+
+        mime = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+
+        file_metadata = {
+            "name": filename,
+            "parents": [folder_id],
+        }
+        media = MediaFileUpload(file_path, mimetype=mime, resumable=True)
+        gfile = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields="id, webViewLink",
+        ).execute()
+
+        file_id = gfile.get("id")
+        # Make file viewable by anyone with link
+        service.permissions().create(
+            fileId=file_id,
+            body={"type": "anyone", "role": "reader"},
+        ).execute()
+
+        link = gfile.get("webViewLink", f"https://drive.google.com/file/d/{file_id}/view")
+        log(f"Google Drive: uploaded {filename} -> {link}")
+        return link
+
+    except ImportError:
+        log("Google Drive: skipped (google-api-python-client not installed)")
+        return None
+    except Exception as e:
+        log(f"Google Drive: error - {e}")
+        return None
+
+
+def upload_files(output_dir, task_id):
+    """Upload all media files in output_dir to Telegram and Google Drive.
+    Returns dict with upload results for callback."""
+    upload_results = {"telegram": [], "gdrive": []}
+
+    media_exts = {".mp4", ".mp3", ".webm", ".m4a", ".mkv", ".avi",
+                  ".jpg", ".jpeg", ".png", ".webp", ".gif"}
+
+    for fname in sorted(os.listdir(output_dir)):
+        fpath = os.path.join(output_dir, fname)
+        if not os.path.isfile(fpath):
+            continue
+        ext = os.path.splitext(fname)[1].lower()
+        if ext not in media_exts and fname != "results.json":
+            # Also try files without known ext (might be video)
+            if os.path.getsize(fpath) < 1024:
+                continue
+        if fname == "results.json":
+            continue
+
+        # Telegram
+        tg_result = upload_to_telegram(fpath, task_id)
+        if tg_result:
+            upload_results["telegram"].append({
+                "filename": fname,
+                "message_id": tg_result.get("message_id"),
+            })
+
+        # Google Drive
+        gd_link = upload_to_gdrive(fpath, task_id)
+        if gd_link:
+            upload_results["gdrive"].append({
+                "filename": fname,
+                "link": gd_link,
+            })
+
+    return upload_results
 
 
 def download_single(url, fmt, output_dir):
@@ -237,6 +391,14 @@ def main():
         "failed": sum(1 for r in results if r["status"] == "failed"),
     }
 
+    # Upload files to Telegram + Google Drive
+    upload_results = {"telegram": [], "gdrive": []}
+    if summary["success"] > 0:
+        log("=== Starting uploads (Telegram + Google Drive) ===")
+        upload_results = upload_files(output_dir, task_id)
+        summary["uploads"] = upload_results
+        log(f"Uploads done: Telegram={len(upload_results['telegram'])}, GDrive={len(upload_results['gdrive'])}")
+
     results_file = os.path.join(output_dir, "results.json")
     with open(results_file, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
@@ -250,6 +412,12 @@ def main():
             f.write(f"task_id={task_id}\n")
             f.write(f"success_count={summary['success']}\n")
             f.write(f"total_count={summary['total']}\n")
+            # Export upload links for callback
+            if upload_results["gdrive"]:
+                gdrive_links = ",".join(r["link"] for r in upload_results["gdrive"])
+                f.write(f"gdrive_links={gdrive_links}\n")
+            if upload_results["telegram"]:
+                f.write(f"telegram_uploaded=true\n")
 
     if summary["success"] == 0:
         sys.exit(1)
