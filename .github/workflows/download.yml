@@ -105,7 +105,7 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./downloads/
-          server-dir: ./public_html/downloads/
+          server-dir: ./public_html/downloader/downloads/
           dangerous-clean-slate: false
 
       - name: Callback to web
