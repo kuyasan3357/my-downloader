@@ -43,11 +43,6 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Deno (JS runtime for yt-dlp)
-        run: |
-          curl -fsSL https://deno.land/install.sh | sh
-          echo "$HOME/.deno/bin" >> $GITHUB_PATH
-
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -61,7 +56,18 @@ jobs:
           sudo apt-get install -y google-chrome-stable
 
       - name: Install Python dependencies
-        run: pip install -U yt-dlp requests selenium
+        run: pip install -U yt-dlp requests selenium bgutil-ytdlp-pot-provider
+
+      - name: Start PO Token server (bypasses YouTube bot detection)
+        run: |
+          echo "=== Setting up bgutil-pot PO Token server ==="
+          wget -q https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-pot-linux-x86_64 -O bgutil-pot
+          chmod +x bgutil-pot
+          ./bgutil-pot server &
+          sleep 3
+          echo "PO Token server started on port 4416"
+          # Verify server is running
+          curl -s http://127.0.0.1:4416/ || echo "Server health check (may not have health endpoint)"
 
       - name: Set variables
         id: vars
@@ -81,6 +87,8 @@ jobs:
 
       - name: Download Video
         id: download
+        env:
+          YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
         run: |
           TASK_ARGS=""
           if [ -n "${{ steps.vars.outputs.TASK_ID }}" ]; then

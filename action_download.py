@@ -41,10 +41,22 @@ FORMAT_MAP = {
 }
 
 DOWNLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads")
+COOKIES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
 
 
 def log(msg):
     print(f"[ACTION] {msg}", flush=True)
+
+
+def setup_cookies():
+    """Write YouTube cookies from env var to cookies.txt file."""
+    cookies_data = os.environ.get("YOUTUBE_COOKIES", "").strip()
+    if cookies_data:
+        with open(COOKIES_FILE, "w", encoding="utf-8") as f:
+            f.write(cookies_data)
+        log(f"Cookies file created: {COOKIES_FILE}")
+        return COOKIES_FILE
+    return None
 
 
 def download_single(url, fmt, output_dir):
@@ -111,11 +123,12 @@ def download_single(url, fmt, output_dir):
             "encoding": "utf-8",
             "noplaylist": True,
             "socket_timeout": 30,
+            "retries": 5,
+            "fragment_retries": 5,
             "concurrent_fragment_downloads": 4,
-            # Anti-bot: use PO token and client workarounds
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["web", "android", "ios"],
+                    "player_client": ["web_creator", "mweb", "web"],
                 },
             },
             "http_headers": {
@@ -124,6 +137,17 @@ def download_single(url, fmt, output_dir):
             },
             **FORMAT_MAP.get(fmt, FORMAT_MAP["best_video"]),
         }
+
+        # Add cookies if available (fallback auth for YouTube)
+        cookies_path = setup_cookies()
+        if cookies_path and os.path.isfile(cookies_path):
+            opts["cookiefile"] = cookies_path
+            log("Using cookies for authentication")
+
+        # PO Token provider is auto-detected by yt-dlp if
+        # bgutil-ytdlp-pot-provider plugin is installed and
+        # the bgutil-pot server is running on port 4416
+        log("PO Token provider should be active (bgutil-pot server)")
 
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=True)
