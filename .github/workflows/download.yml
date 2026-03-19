@@ -99,14 +99,26 @@ jobs:
 
       - name: Upload to Hosting (FTP)
         if: success()
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./downloads/
-          server-dir: ./public_html/downloader/downloads/
-          dangerous-clean-slate: false
+        run: |
+          sudo apt-get install -y lftp
+          TASK_ID="${{ steps.download.outputs.task_id }}"
+
+          echo "=== Uploading files via FTP ==="
+          echo "Task ID: $TASK_ID"
+
+          # Create task directory and upload all video/audio files
+          lftp -u "${{ secrets.FTP_USERNAME }},${{ secrets.FTP_PASSWORD }}" "${{ secrets.FTP_SERVER }}" <<EOF
+          set ssl:verify-certificate no
+          set ftp:passive-mode yes
+          mkdir -p /public_html/downloader/downloads/${TASK_ID}
+          cd /public_html/downloader/downloads/${TASK_ID}
+          lcd downloads/${TASK_ID}
+          mput -E *.mp4 *.mp3 *.webm *.m4a *.jpg *.png *.webp 2>/dev/null || true
+          glob mput *
+          bye
+          EOF
+
+          echo "=== FTP upload done ==="
 
       - name: Callback to web
         if: always() && steps.vars.outputs.CALLBACK_URL != ''
