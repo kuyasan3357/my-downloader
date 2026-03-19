@@ -97,17 +97,16 @@ jobs:
             !downloads/**/results.json
           retention-days: 1
 
-      # FTP Upload - uncomment when FTP secrets are correctly configured
-      # - name: Upload to Hosting (FTP)
-      #   if: success()
-      #   uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-      #   with:
-      #     server: ${{ secrets.FTP_SERVER }}
-      #     username: ${{ secrets.FTP_USERNAME }}
-      #     password: ${{ secrets.FTP_PASSWORD }}
-      #     local-dir: ./downloads/
-      #     server-dir: ./public_html/downloads/
-      #     dangerous-clean-slate: false
+      - name: Upload to Hosting (FTP)
+        if: success()
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./downloads/
+          server-dir: ./public_html/downloads/
+          dangerous-clean-slate: false
 
       - name: Callback to web
         if: always() && steps.vars.outputs.CALLBACK_URL != ''
