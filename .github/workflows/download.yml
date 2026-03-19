@@ -43,6 +43,11 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install Deno (JS runtime required by yt-dlp for YouTube n-param)
+        run: |
+          curl -fsSL https://deno.land/install.sh | sh
+          echo "$HOME/.deno/bin" >> $GITHUB_PATH
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
