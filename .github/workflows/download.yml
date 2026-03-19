@@ -1,0 +1,122 @@
+name: Video Downloader
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_url:
+        description: 'Video URL to download'
+        required: true
+      format:
+        description: 'Download format'
+        required: false
+        default: 'best_video'
+        type: choice
+        options:
+          - best_video
+          - mp4_1080
+          - mp4_720
+          - mp3_audio
+      task_id:
+        description: 'Task ID (auto-generated if empty)'
+        required: false
+        default: ''
+
+  repository_dispatch:
+    types: [download_video]
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Install Chrome (for Selenium/Douyin)
+        run: |
+          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      - name: Install Python dependencies
+        run: pip install yt-dlp requests selenium
+
+      - name: Set variables
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "VIDEO_URL=${{ github.event.client_payload.video_url }}" >> $GITHUB_OUTPUT
+            echo "FORMAT=${{ github.event.client_payload.format || 'best_video' }}" >> $GITHUB_OUTPUT
+            echo "TASK_ID=${{ github.event.client_payload.task_id || '' }}" >> $GITHUB_OUTPUT
+            echo "CALLBACK_URL=${{ github.event.client_payload.callback_url || '' }}" >> $GITHUB_OUTPUT
+          else
+            echo "VIDEO_URL=${{ github.event.inputs.video_url }}" >> $GITHUB_OUTPUT
+            echo "FORMAT=${{ github.event.inputs.format }}" >> $GITHUB_OUTPUT
+            echo "TASK_ID=${{ github.event.inputs.task_id || '' }}" >> $GITHUB_OUTPUT
+            echo "CALLBACK_URL=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download Video
+        id: download
+        run: |
+          TASK_ARGS=""
+          if [ -n "${{ steps.vars.outputs.TASK_ID }}" ]; then
+            TASK_ARGS="--task-id ${{ steps.vars.outputs.TASK_ID }}"
+          fi
+          python action_download.py \
+            --url "${{ steps.vars.outputs.VIDEO_URL }}" \
+            --format "${{ steps.vars.outputs.FORMAT }}" \
+            $TASK_ARGS
+
+      - name: List downloaded files
+        if: always()
+        run: |
+          echo "=== Downloaded files ==="
+          find downloads/ -type f ! -name "results.json" -exec ls -lh {} \; 2>/dev/null || echo "No files"
+
+      - name: Upload as Artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: downloaded-video-${{ steps.download.outputs.task_id || github.run_id }}
+          path: |
+            downloads/
+            !downloads/**/results.json
+          retention-days: 1
+
+      - name: Upload to Hosting (FTP)
+        if: success() && env.FTP_SERVER != ''
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./downloads/
+          server-dir: ./public_html/downloads/
+          dangerous-clean-slate: false
+
+      - name: Callback to web
+        if: always() && steps.vars.outputs.CALLBACK_URL != ''
+        run: |
+          STATUS="${{ job.status }}"
+          TASK_ID="${{ steps.download.outputs.task_id || steps.vars.outputs.TASK_ID }}"
+          RUN_ID="${{ github.run_id }}"
+          FILES=$(find downloads/ -type f ! -name "results.json" -printf '%f|%s\n' 2>/dev/null | head -20)
+          curl -s -X POST "${{ steps.vars.outputs.CALLBACK_URL }}" \
+            -H "Content-Type: application/json" \
+            -H "X-Action-Secret: ${{ secrets.ACTION_SECRET }}" \
+            -d "{\"task_id\":\"${TASK_ID}\",\"run_id\":\"${RUN_ID}\",\"status\":\"${STATUS}\",\"files\":\"${FILES}\"}" || true

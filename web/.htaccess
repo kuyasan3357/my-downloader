@@ -1,0 +1,5 @@
+<FilesMatch "(config\.php|tasks\.json)$">
+    Order deny,allow
+    Deny from all
+</FilesMatch>
+Options -Indexes

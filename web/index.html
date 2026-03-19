@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Downloader Pro</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f23;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .container { max-width: 720px; margin: 0 auto; padding: 40px 20px; }
+        h1 {
+            text-align: center; font-size: 2em;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+        .subtitle { text-align: center; color: #888; margin-bottom: 40px; font-size: 0.9em; }
+        .card {
+            background: #1a1a2e; border-radius: 16px; padding: 32px;
+            margin-bottom: 24px; border: 1px solid #2a2a4a;
+        }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: #b0b0d0; }
+        textarea {
+            width: 100%; min-height: 100px; background: #12122a;
+            border: 2px solid #2a2a4a; border-radius: 12px; color: #fff;
+            padding: 16px; font-size: 15px; resize: vertical; transition: border-color 0.3s;
+        }
+        textarea:focus { outline: none; border-color: #667eea; }
+        textarea::placeholder { color: #555; }
+        .format-row { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+        .format-btn {
+            flex: 1; min-width: 120px; padding: 12px 16px; background: #12122a;
+            border: 2px solid #2a2a4a; border-radius: 10px; color: #b0b0d0;
+            cursor: pointer; text-align: center; font-size: 14px; transition: all 0.3s;
+        }
+        .format-btn:hover { border-color: #667eea; color: #fff; }
+        .format-btn.active { border-color: #667eea; background: rgba(102,126,234,0.15); color: #fff; }
+        .download-btn {
+            width: 100%; padding: 16px; margin-top: 24px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none; border-radius: 12px; color: #fff;
+            font-size: 16px; font-weight: 700; cursor: pointer; transition: opacity 0.3s;
+        }
+        .download-btn:hover { opacity: 0.9; }
+        .download-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .progress-section { display: none; }
+        .progress-section.visible { display: block; }
+        .progress-bar-bg { width: 100%; height: 8px; background: #2a2a4a; border-radius: 4px; overflow: hidden; margin: 16px 0; }
+        .progress-bar { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 4px; transition: width 0.5s; width: 0%; }
+        .status-msg { color: #b0b0d0; font-size: 14px; margin-bottom: 8px; }
+        .status-msg.error { color: #ff6b6b; }
+        .status-msg.success { color: #51cf66; }
+        .file-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 16px; background: #12122a; border-radius: 10px; margin-top: 8px;
+        }
+        .file-info { flex: 1; overflow: hidden; }
+        .file-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .file-size { color: #888; font-size: 13px; }
+        .file-dl-btn {
+            padding: 8px 16px; background: #667eea; border: none; border-radius: 8px;
+            color: #fff; text-decoration: none; font-size: 13px; font-weight: 600; margin-left: 12px;
+        }
+        .file-dl-btn:hover { background: #5a6fd6; }
+        .spinner {
+            display: inline-block; width: 18px; height: 18px;
+            border: 3px solid #2a2a4a; border-top-color: #667eea;
+            border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .link { color: #667eea; text-decoration: none; }
+        .link:hover { text-decoration: underline; }
+        .info { text-align: center; color: #666; font-size: 13px; margin-top: 24px; line-height: 1.6; }
+        @media (max-width: 480px) {
+            .container { padding: 20px 16px; }
+            h1 { font-size: 1.5em; }
+            .card { padding: 20px; }
+            .format-btn { min-width: 100px; font-size: 13px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Video Downloader Pro</h1>
+    <p class="subtitle">YouTube, Facebook, Instagram, TikTok, Douyin, XHS, 1000+ sites</p>
+
+    <div class="card">
+        <label for="urlInput">Paste video URL</label>
+        <textarea id="urlInput" placeholder="https://www.youtube.com/watch?v=...&#10;https://www.tiktok.com/@user/video/...&#10;&#10;Paste one or more URLs"></textarea>
+
+        <label style="margin-top:20px">Format</label>
+        <div class="format-row">
+            <div class="format-btn active" data-format="best_video">Best Quality</div>
+            <div class="format-btn" data-format="mp4_1080">1080p</div>
+            <div class="format-btn" data-format="mp4_720">720p</div>
+            <div class="format-btn" data-format="mp3_audio">MP3 Audio</div>
+        </div>
+
+        <button class="download-btn" id="downloadBtn" onclick="startDownload()">Download</button>
+    </div>
+
+    <div class="card progress-section" id="progressSection">
+        <div class="status-msg" id="statusMsg"><span class="spinner"></span> Preparing...</div>
+        <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
+        <div id="fileList"></div>
+        <div id="actionsLink" style="margin-top:12px;display:none">
+            <a class="link" href="#" target="_blank" id="ghLink">View on GitHub Actions</a>
+        </div>
+    </div>
+
+    <p class="info">Powered by yt-dlp + GitHub Actions<br>Videos are processed on GitHub servers.</p>
+</div>
+
+<script>
+let selectedFormat = 'best_video';
+let currentTaskId = null;
+let pollTimer = null;
+
+document.querySelectorAll('.format-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.format-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedFormat = btn.dataset.format;
+    });
+});
+
+async function startDownload() {
+    const url = document.getElementById('urlInput').value.trim();
+    if (!url) { alert('Please paste a video URL'); return; }
+
+    const btn = document.getElementById('downloadBtn');
+    btn.disabled = true;
+    btn.textContent = 'Sending to GitHub Actions...';
+
+    const section = document.getElementById('progressSection');
+    section.classList.add('visible');
+    setStatus('spinner', 'Queuing download...');
+    setProgress(10);
+    document.getElementById('fileList').innerHTML = '';
+    document.getElementById('actionsLink').style.display = 'none';
+
+    try {
+        const resp = await fetch('api.php?action=download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, format: selectedFormat }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || data.error) throw new Error(data.error || data.details || 'Failed');
+
+        currentTaskId = data.task_id;
+        setStatus('spinner', 'Queued! GitHub Actions is starting...');
+        setProgress(20);
+        startPolling();
+    } catch (err) {
+        setStatus('error', 'Error: ' + err.message);
+        setProgress(0);
+        resetBtn();
+    }
+}
+
+function startPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(checkStatus, 5000);
+}
+
+async function checkStatus() {
+    if (!currentTaskId) return;
+    try {
+        const resp = await fetch('api.php?action=status&task_id=' + currentTaskId);
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+
+        if (data.actions_url) {
+            document.getElementById('actionsLink').style.display = 'block';
+            document.getElementById('ghLink').href = data.actions_url;
+        }
+
+        switch (data.status) {
+            case 'queued':
+                setStatus('spinner', 'Waiting for GitHub Actions...');
+                setProgress(20);
+                break;
+            case 'running':
+                setStatus('spinner', 'Downloading on GitHub server...');
+                setProgress(50);
+                break;
+            case 'completed':
+                setStatus('success', 'Download completed!');
+                setProgress(100);
+                clearInterval(pollTimer);
+                resetBtn();
+                break;
+            case 'failed':
+                setStatus('error', data.message || 'Download failed');
+                setProgress(100);
+                clearInterval(pollTimer);
+                resetBtn();
+                break;
+        }
+
+        if (data.files && data.files.length > 0) {
+            document.getElementById('fileList').innerHTML = data.files.map(f => `
+                <div class="file-item">
+                    <div class="file-info">
+                        <div class="file-name">${esc(f.filename)}</div>
+                        <div class="file-size">${f.size_human || ''}</div>
+                    </div>
+                    <a class="file-dl-btn" href="${f.download_url}" download>Download</a>
+                </div>
+            `).join('');
+        }
+    } catch (err) { console.error('Poll error:', err); }
+}
+
+function setStatus(type, msg) {
+    const el = document.getElementById('statusMsg');
+    if (type === 'spinner') { el.className = 'status-msg'; el.innerHTML = '<span class="spinner"></span> ' + msg; }
+    else if (type === 'error') { el.className = 'status-msg error'; el.textContent = msg; }
+    else if (type === 'success') { el.className = 'status-msg success'; el.textContent = msg; }
+}
+
+function setProgress(pct) { document.getElementById('progressBar').style.width = pct + '%'; }
+function resetBtn() { const b = document.getElementById('downloadBtn'); b.disabled = false; b.textContent = 'Download'; }
+function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+</script>
+</body>
+</html>
