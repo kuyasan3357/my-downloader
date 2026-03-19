@@ -60,14 +60,16 @@ jobs:
 
       - name: Start PO Token server (bypasses YouTube bot detection)
         run: |
-          echo "=== Setting up bgutil-pot PO Token server ==="
-          wget -q https://github.com/jim60105/bgutil-ytdlp-pot-provider-rs/releases/latest/download/bgutil-pot-linux-x86_64 -O bgutil-pot
-          chmod +x bgutil-pot
-          ./bgutil-pot server &
-          sleep 3
-          echo "PO Token server started on port 4416"
+          echo "=== Setting up bgutil-pot PO Token server (Node.js) ==="
+          git clone --single-branch --branch 1.3.1 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /tmp/bgutil-pot
+          cd /tmp/bgutil-pot/server/
+          npm ci
+          npx tsc
+          node build/main.js &
+          sleep 5
+          echo "PO Token server started on port 4416 (v1.3.1)"
           # Verify server is running
-          curl -s http://127.0.0.1:4416/ || echo "Server health check (may not have health endpoint)"
+          curl -sf http://127.0.0.1:4416/ && echo "Server OK" || echo "Server started (no health endpoint)"
 
       - name: Set variables
         id: vars
